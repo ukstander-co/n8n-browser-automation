@@ -58,7 +58,7 @@ async function loadCookies(context, filePath) {
     }
 }
 
-// 1. PINTEREST ENGINE (FULLY AUTOMATED)
+// 1. PINTEREST ENGINE (FULLY AUTOMATED WITH SLOWMO FOR VISIBILITY)
 async function postToPinterest(browser, data) {
     console.log(`[PINTEREST] Initializing upload workflow...`);
     const context = await browser.newContext();
@@ -75,6 +75,7 @@ async function postToPinterest(browser, data) {
 
         // Navigate to the creation tool
         await page.goto('https://www.pinterest.com/pin-creation-tool/', { waitUntil: 'networkidle' });
+        await page.waitForTimeout(3000); // Visual stability cushion
         
         // Session validation check
         if (await page.url().includes('login')) {
@@ -94,11 +95,10 @@ async function postToPinterest(browser, data) {
             const fileInput = await page.$('input[type="file"]');
             await fileInput.setInputFiles(tempImagePath);
             console.log("[PINTEREST] Visual media payload successfully attached.");
-        } else {
-            console.log("[PINTEREST WARN] No image asset found in payload.");
+            await page.waitForTimeout(2000);
         }
 
-        // Title injection using sequential selectors for modern Pinterest UI layouts
+        // Title injection
         if (data.title) {
             const titleSelector = 'input[id="storyboard-selector-title"], input[placeholder*="title"], [title="Add your title"]';
             await page.waitForSelector(titleSelector, { timeout: 10000 });
@@ -128,18 +128,14 @@ async function postToPinterest(browser, data) {
         const publishButtonSelector = 'button[type="button"] :text-matches("Publish", "i"), button:has-text("Publish")';
         await page.waitForSelector(publishButtonSelector, { timeout: 10000 });
         
-        // Click and wait for stable state redirect
-        await Promise.all([
-            page.click(publishButtonSelector),
-            page.waitForNavigation({ waitUntil: 'networkidle', timeout: 20000 }).catch(() => console.log("[PINTEREST INFO] Standard navigation catch triggered post-click."))
-        ]);
+        await page.click(publishButtonSelector);
+        await page.waitForTimeout(5000); // Wait to watch the transition live
         
         console.log("[PINTEREST SUCCESS] Pin content successfully compiled and broadcasted.");
 
     } catch (err) { 
         console.error("[PINTEREST CRITICAL ERROR]", err.message); 
     } finally {
-        // Clean up locally created file asset
         if (fs.existsSync(tempImagePath)) {
             fs.unlinkSync(tempImagePath);
         }
@@ -152,20 +148,13 @@ async function postToFacebook(browser, data) {
     console.log(`[FACEBOOK] Initializing Page Creator Studio...`);
     const context = await browser.newContext();
     const page = await context.newPage();
-    
     try {
         const cookiesLoaded = await loadCookies(context, 'facebook_cookies.json');
-        if (!cookiesLoaded) {
-            console.log("[FACEBOOK SKIPPED] Due to cookie injection failure.");
-            await context.close();
-            return;
-        }
-
+        if (!cookiesLoaded) return;
         await page.goto('https://business.facebook.com/latest/composer', { waitUntil: 'networkidle' });
         console.log("[FACEBOOK] Landed on Meta Business Composer.");
-    } catch (err) { 
-        console.error("[FACEBOOK ERROR]", err.message); 
-    }
+        await page.waitForTimeout(4000);
+    } catch (err) { console.error("[FACEBOOK ERROR]", err.message); }
     await context.close();
 }
 
@@ -177,20 +166,13 @@ async function postToInstagram(browser, data) {
         userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Mobile/15E148 Safari/604.1'
     });
     const page = await context.newPage();
-    
     try {
         const cookiesLoaded = await loadCookies(context, 'instagram_cookies.json');
-        if (!cookiesLoaded) {
-            console.log("[INSTAGRAM SKIPPED] Due to cookie injection failure.");
-            await context.close();
-            return;
-        }
-
+        if (!cookiesLoaded) return;
         await page.goto('https://www.instagram.com/', { waitUntil: 'networkidle' });
         console.log("[INSTAGRAM] Session activated on mobile layout.");
-    } catch (err) { 
-        console.error("[INSTAGRAM ERROR]", err.message); 
-    }
+        await page.waitForTimeout(4000);
+    } catch (err) { console.error("[INSTAGRAM ERROR]", err.message); }
     await context.close();
 }
 
@@ -199,27 +181,24 @@ async function postToTikTok(browser, data) {
     console.log(`[TIKTOK] Initializing TikTok Upload Portal...`);
     const context = await browser.newContext();
     const page = await context.newPage();
-    
     try {
         const cookiesLoaded = await loadCookies(context, 'tiktok_cookies.json');
-        if (!cookiesLoaded) {
-            console.log("[TIKTOK SKIPPED] Due to cookie injection failure.");
-            await context.close();
-            return;
-        }
-
+        if (!cookiesLoaded) return;
         await page.goto('https://www.tiktok.com/creator-center/upload', { waitUntil: 'networkidle' });
         console.log("[TIKTOK] Landed on TikTok Creator Panel.");
-    } catch (err) { 
-        console.error("[TIKTOK ERROR]", err.message); 
-    }
+        await page.waitForTimeout(4000);
+    } catch (err) { console.error("[TIKTOK ERROR]", err.message); }
     await context.close();
 }
 
 // MASTER ENGINE INITIALIZATION
 (async () => {
-    console.log("[LAUNCH] Starting Headless Multi-Platform Engine Context...");
-    const browser = await chromium.launch({ headless: true });
+    console.log("[LAUNCH] Starting GUI Graphical Context Mode...");
+    // Headless false and slowMo added so actions can be seen clearly on screen stream
+    const browser = await chromium.launch({ 
+        headless: false,
+        slowMo: 100 
+    });
 
     if (payload.pinterest) {
         try { await postToPinterest(browser, payload.pinterest); } catch(e) { console.error("Pinterest wrapper crashed", e); }

@@ -1,30 +1,40 @@
-name: Cloud Browser Automation Workflow
+name: Multi-Platform Cloud Browser Automation
 
 on:
   repository_dispatch:
     types: [n8n-trigger]
 
 jobs:
-  run-browser:
+  run-automation:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v3
         with:
-          node-version: '20'
+          node-version: '18'
 
-      - name: Install Node Dependencies
-        run: npm install
+      - name: Install Playwright & Dependencies
+        run: |
+          npm install playwright
+          npx playwright install chromium --with-deps
 
-      - name: Install Playwright Chromium Core
-        run: npx playwright install chromium --with-deps
+      - name: Inject Target Session Cookies
+        env:
+          FB_COOKIES: ${{ secrets.FACEBOOK_COOKIES }}
+          IG_COOKIES: ${{ secrets.INSTAGRAM_COOKIES }}
+          PIN_COOKIES: ${{ secrets.PINTEREST_COOKIES }}
+          TT_COOKIES: ${{ secrets.TIKTOK_COOKIES }}
+        run: |
+          echo "$FB_COOKIES" > facebook_cookies.json
+          echo "$IG_COOKIES" > instagram_cookies.json
+          echo "$PIN_COOKIES" > pinterest_cookies.json
+          echo "$TT_COOKIES" > tiktok_cookies.json
 
       - name: Execute Automation Script
         env:
-          # Pure nested payload ko direct script ko pass karne ka tarika
           PAYLOAD_DATA: ${{ toJson(github.event.client_payload) }}
         run: node upload-script.js

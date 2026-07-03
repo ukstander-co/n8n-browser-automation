@@ -8,10 +8,26 @@ if (!payload) {
     process.exit(1);
 }
 
-// Cookies injection utility function
+// Cookies injection utility function (UPDATED to sanitize sameSite values)
 async function loadCookies(context, filePath) {
     if (fs.existsSync(filePath)) {
-        const cookies = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        let cookies = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        
+        // Playwright ki strict requirements ke liye sameSite sanitize karna
+        cookies = cookies.map(cookie => {
+            if (cookie.sameSite) {
+                // Pehla letter Capitalize karna (e.g., 'lax' -> 'Lax')
+                let formatted = cookie.sameSite.charAt(0).toUpperCase() + cookie.sameSite.slice(1).toLowerCase();
+                
+                // Agar standard values ('Strict', 'Lax', 'None') ke alawa kuch aur ho, toh fallback 'Lax' par set karna
+                if (!['Strict', 'Lax', 'None'].includes(formatted)) {
+                    formatted = 'Lax'; 
+                }
+                cookie.sameSite = formatted;
+            }
+            return cookie;
+        });
+
         await context.addCookies(cookies);
         console.log(`[COOKIES] Successfully injected cookies from ${filePath}`);
     } else {

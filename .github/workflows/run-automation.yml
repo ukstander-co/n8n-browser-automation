@@ -25,10 +25,6 @@ jobs:
 
       - name: Execute Automation Script
         env:
-          # Yahan ham n8n se aane wale exact parameters script ko pass kar rahe hain
-          TARGET_URL: ${{ github.event.client_payload.url }}
-          PIN_TITLE: ${{ github.event.client_payload.pin_title }}
-          PIN_DESCRIPTION: ${{ github.event.client_payload.pin_description }}
-          PIN_LINK: ${{ github.event.client_payload.pin_link }}
-          PIN_IMAGE: ${{ github.event.client_payload.pin_image }}
+          # Pure nested payload ko direct script ko pass karne ka tarika
+          PAYLOAD_DATA: ${{ toJson(github.event.client_payload) }}
         run: node upload-script.js

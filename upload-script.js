@@ -58,7 +58,7 @@ async function loadCookies(context, filePath) {
     }
 }
 
-// 1. PINTEREST ENGINE (FULLY AUTOMATED WITH SLOWMO FOR VISIBILITY)
+// 1. PINTEREST ENGINE
 async function postToPinterest(browser, data) {
     console.log(`[PINTEREST] Initializing upload workflow...`);
     const context = await browser.newContext();
@@ -75,11 +75,12 @@ async function postToPinterest(browser, data) {
 
         // Navigate to the creation tool
         await page.goto('https://www.pinterest.com/pin-creation-tool/', { waitUntil: 'networkidle' });
-        await page.waitForTimeout(3000); // Visual stability cushion
+        await page.waitForTimeout(3000); 
         
         // Session validation check
         if (await page.url().includes('login')) {
             console.log("[PINTEREST ERR] Cookies expired or invalid! Skipping...");
+            await page.screenshot({ path: 'pinterest_login_error_snapshot.png' });
             await context.close();
             return;
         }
@@ -90,7 +91,6 @@ async function postToPinterest(browser, data) {
             console.log(`[PINTEREST] Downloading media asset from: ${data.image}`);
             await downloadImage(data.image, tempImagePath);
             
-            // Wait for file upload input to be ready
             await page.waitForSelector('input[type="file"]', { timeout: 15000 });
             const fileInput = await page.$('input[type="file"]');
             await fileInput.setInputFiles(tempImagePath);
@@ -129,12 +129,13 @@ async function postToPinterest(browser, data) {
         await page.waitForSelector(publishButtonSelector, { timeout: 10000 });
         
         await page.click(publishButtonSelector);
-        await page.waitForTimeout(5000); // Wait to watch the transition live
+        await page.waitForTimeout(8000); // stable wait to watch output live
         
         console.log("[PINTEREST SUCCESS] Pin content successfully compiled and broadcasted.");
 
     } catch (err) { 
         console.error("[PINTEREST CRITICAL ERROR]", err.message); 
+        await page.screenshot({ path: 'pinterest_crash_snapshot.png' });
     } finally {
         if (fs.existsSync(tempImagePath)) {
             fs.unlinkSync(tempImagePath);
@@ -154,7 +155,10 @@ async function postToFacebook(browser, data) {
         await page.goto('https://business.facebook.com/latest/composer', { waitUntil: 'networkidle' });
         console.log("[FACEBOOK] Landed on Meta Business Composer.");
         await page.waitForTimeout(4000);
-    } catch (err) { console.error("[FACEBOOK ERROR]", err.message); }
+    } catch (err) { 
+        console.error("[FACEBOOK ERROR]", err.message); 
+        await page.screenshot({ path: 'facebook_crash_snapshot.png' });
+    }
     await context.close();
 }
 
@@ -172,7 +176,10 @@ async function postToInstagram(browser, data) {
         await page.goto('https://www.instagram.com/', { waitUntil: 'networkidle' });
         console.log("[INSTAGRAM] Session activated on mobile layout.");
         await page.waitForTimeout(4000);
-    } catch (err) { console.error("[INSTAGRAM ERROR]", err.message); }
+    } catch (err) { 
+        console.error("[INSTAGRAM ERROR]", err.message); 
+        await page.screenshot({ path: 'instagram_crash_snapshot.png' });
+    }
     await context.close();
 }
 
@@ -187,17 +194,22 @@ async function postToTikTok(browser, data) {
         await page.goto('https://www.tiktok.com/creator-center/upload', { waitUntil: 'networkidle' });
         console.log("[TIKTOK] Landed on TikTok Creator Panel.");
         await page.waitForTimeout(4000);
-    } catch (err) { console.error("[TIKTOK ERROR]", err.message); }
+    } catch (err) { 
+        console.error("[TIKTOK ERROR]", err.message); 
+        await page.screenshot({ path: 'tiktok_crash_snapshot.png' });
+    }
     await context.close();
 }
 
 // MASTER ENGINE INITIALIZATION
 (async () => {
+    console.log("[WAIT] Pausing for 20 seconds so you can open the Localtunnel URL in your browser...");
+    await new Promise(resolve => setTimeout(resolve, 20000)); // 20 sec delay for you to open the link
+
     console.log("[LAUNCH] Starting GUI Graphical Context Mode...");
-    // Headless false and slowMo added so actions can be seen clearly on screen stream
     const browser = await chromium.launch({ 
         headless: false,
-        slowMo: 100 
+        slowMo: 150 // Thoda slow kiya taaki screen par chalte huye clear dikhe
     });
 
     if (payload.pinterest) {

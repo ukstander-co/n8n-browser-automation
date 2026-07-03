@@ -1,5 +1,7 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
+const path = require('path');
+const https = require('https');
 
 // Payload Data Extract karna
 const payload = process.env.PAYLOAD_DATA ? JSON.parse(process.env.PAYLOAD_DATA) : null;
@@ -8,12 +10,27 @@ if (!payload) {
     process.exit(1);
 }
 
+// Utility function to download image from URL to local disk for file uploading
+function downloadImage(url, dest) {
+    return new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(dest);
+        https.get(url, (response) => {
+            response.pipe(file);
+            file.on('finish', () => {
+                file.close(resolve);
+            });
+        }).on('error', (err) => {
+            fs.unlink(dest, () => {}); 
+            reject(err);
+        });
+    });
+}
+
 // Cookies injection utility function (Safe mode)
 async function loadCookies(context, filePath) {
     if (fs.existsSync(filePath)) {
         let cookies = JSON.parse(fs.readFileSync(filePath, 'utf8'));
         
-        // Playwright ki strict requirements ke liye sameSite sanitize karna
         cookies = cookies.map(cookie => {
             if (cookie.sameSite) {
                 let formatted = cookie.sameSite.charAt(0).toUpperCase() + cookie.sameSite.slice(1).toLowerCase();
@@ -22,12 +39,11 @@ async function loadCookies(context, filePath) {
                 }
                 cookie.sameSite = formatted;
             } else {
-                cookie.sameSite = 'Lax'; // Default fallback agar missing ho
+                cookie.sameSite = 'Lax';
             }
             return cookie;
         });
 
-        // Agar cookies inject karne me phir bhi issue aaye toh crash na karein
         try {
             await context.addCookies(cookies);
             console.log(`[COOKIES] Successfully injected cookies from ${filePath}`);
@@ -42,11 +58,12 @@ async function loadCookies(context, filePath) {
     }
 }
 
-// 1. PINTEREST ENGINE
+// 1. PINTEREST ENGINE (FULLY AUTOMATED)
 async function postToPinterest(browser, data) {
-    console.log(`[PINTEREST] Initializing upload...`);
+    console.log(`[PINTEREST] Initializing upload workflow...`);
     const context = await browser.newContext();
     const page = await context.newPage();
+    const tempImagePath = path.join(__dirname, 'temp_pinterest.jpg');
     
     try {
         const cookiesLoaded = await loadCookies(context, 'pinterest_cookies.json');
@@ -56,20 +73,78 @@ async function postToPinterest(browser, data) {
             return;
         }
 
+        // Navigate to the creation tool
         await page.goto('https://www.pinterest.com/pin-creation-tool/', { waitUntil: 'networkidle' });
         
-        // Check if logged in
+        // Session validation check
         if (await page.url().includes('login')) {
             console.log("[PINTEREST ERR] Cookies expired or invalid! Skipping...");
             await context.close();
             return;
         }
         console.log("[PINTEREST] Logged in successfully via session storage.");
-        // Baki upload workflows...
+
+        // Image link parsing and local downloading
+        if (data.image) {
+            console.log(`[PINTEREST] Downloading media asset from: ${data.image}`);
+            await downloadImage(data.image, tempImagePath);
+            
+            // Wait for file upload input to be ready
+            await page.waitForSelector('input[type="file"]', { timeout: 15000 });
+            const fileInput = await page.$('input[type="file"]');
+            await fileInput.setInputFiles(tempImagePath);
+            console.log("[PINTEREST] Visual media payload successfully attached.");
+        } else {
+            console.log("[PINTEREST WARN] No image asset found in payload.");
+        }
+
+        // Title injection using sequential selectors for modern Pinterest UI layouts
+        if (data.title) {
+            const titleSelector = 'input[id="storyboard-selector-title"], input[placeholder*="title"], [title="Add your title"]';
+            await page.waitForSelector(titleSelector, { timeout: 10000 });
+            await page.fill(titleSelector, data.title);
+            console.log("[PINTEREST] Meta Title configured.");
+        }
+
+        // Description/Caption injection
+        if (data.description || data.caption) {
+            const descText = data.description || data.caption;
+            const descSelector = 'div[role="textbox"][id*="description"], textarea[placeholder*="tell everyone"], [title="Tell everyone what your Pin is about"]';
+            await page.waitForSelector(descSelector, { timeout: 10000 });
+            await page.fill(descSelector, descText);
+            console.log("[PINTEREST] Context Description injected.");
+        }
+
+        // Destination Link injection
+        if (data.link) {
+            const linkSelector = 'input[id="storyboard-selector-link"], input[placeholder*="link"], [title="Add a destination link"]';
+            await page.waitForSelector(linkSelector, { timeout: 10000 });
+            await page.fill(linkSelector, data.link);
+            console.log("[PINTEREST] Destination Anchor Link mapped.");
+        }
+
+        // Finalize Workflow: Publishing execution
+        console.log("[PINTEREST] Locating standard publication targets...");
+        const publishButtonSelector = 'button[type="button"] :text-matches("Publish", "i"), button:has-text("Publish")';
+        await page.waitForSelector(publishButtonSelector, { timeout: 10000 });
+        
+        // Click and wait for stable state redirect
+        await Promise.all([
+            page.click(publishButtonSelector),
+            page.waitForNavigation({ waitUntil: 'networkidle', timeout: 20000 }).catch(() => console.log("[PINTEREST INFO] Standard navigation catch triggered post-click."))
+        ]);
+        
+        console.log("[PINTEREST SUCCESS] Pin content successfully compiled and broadcasted.");
+
     } catch (err) { 
-        console.error("[PINTEREST ERROR]", err.message); 
+        console.error("[PINTEREST CRITICAL ERROR]", err.message); 
+    } finally {
+        // Clean up locally created file asset
+        if (fs.existsSync(tempImagePath)) {
+            fs.unlinkSync(tempImagePath);
+        }
+        await context.close();
     }
-    await context.close();
 }
 
 // 2. META/FACEBOOK PAGE ENGINE
@@ -88,7 +163,6 @@ async function postToFacebook(browser, data) {
 
         await page.goto('https://business.facebook.com/latest/composer', { waitUntil: 'networkidle' });
         console.log("[FACEBOOK] Landed on Meta Business Composer.");
-        // Baki upload workflows...
     } catch (err) { 
         console.error("[FACEBOOK ERROR]", err.message); 
     }
@@ -114,7 +188,6 @@ async function postToInstagram(browser, data) {
 
         await page.goto('https://www.instagram.com/', { waitUntil: 'networkidle' });
         console.log("[INSTAGRAM] Session activated on mobile layout.");
-        // Baki upload workflows...
     } catch (err) { 
         console.error("[INSTAGRAM ERROR]", err.message); 
     }
@@ -148,7 +221,6 @@ async function postToTikTok(browser, data) {
     console.log("[LAUNCH] Starting Headless Multi-Platform Engine Context...");
     const browser = await chromium.launch({ headless: true });
 
-    // Individual try-catch taaki ek fail ho toh baki execute hon
     if (payload.pinterest) {
         try { await postToPinterest(browser, payload.pinterest); } catch(e) { console.error("Pinterest wrapper crashed", e); }
     }

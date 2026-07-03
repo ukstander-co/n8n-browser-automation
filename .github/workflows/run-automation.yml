@@ -25,6 +25,10 @@ jobs:
 
       - name: Execute Automation Script
         env:
+          # Yahan ham n8n se aane wale exact parameters script ko pass kar rahe hain
           TARGET_URL: ${{ github.event.client_payload.url }}
-          POST_CONTENT: ${{ github.event.client_payload.content }}
+          PIN_TITLE: ${{ github.event.client_payload.pin_title }}
+          PIN_DESCRIPTION: ${{ github.event.client_payload.pin_description }}
+          PIN_LINK: ${{ github.event.client_payload.pin_link }}
+          PIN_IMAGE: ${{ github.event.client_payload.pin_image }}
         run: node upload-script.js

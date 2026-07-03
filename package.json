@@ -1,0 +1,9 @@
+{
+  "name": "n8n-browser-automation",
+  "version": "1.0.0",
+  "description": "Cloud Browser Automation via GitHub Actions",
+  "main": "upload-script.js",
+  "dependencies": {
+    "playwright": "^1.42.0"
+  }
+}

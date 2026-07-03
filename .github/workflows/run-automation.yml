@@ -1,0 +1,30 @@
+name: Cloud Browser Automation Workflow
+
+on:
+  repository_dispatch:
+    types: [n8n-trigger]
+
+jobs:
+  run-browser:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node Dependencies
+        run: npm install
+
+      - name: Install Playwright Chromium Core
+        run: npx playwright install chromium --with-deps
+
+      - name: Execute Automation Script
+        env:
+          TARGET_URL: ${{ github.event.client_payload.url }}
+          POST_CONTENT: ${{ github.event.client_payload.content }}
+        run: node upload-script.js
